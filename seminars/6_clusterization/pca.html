@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Что даёт центрирование</title>
+<style>
+  :root {
+    --color-background-primary: #ffffff;
+    --color-background-secondary: #f1efe8;
+    --color-background-tertiary: #e8e6df;
+    --color-text-primary: #2c2c2a;
+    --color-text-secondary: #5f5e5a;
+    --color-border-secondary: rgba(0,0,0,0.2);
+    --color-border-primary: rgba(0,0,0,0.35);
+    --color-border-tertiary: rgba(0,0,0,0.12);
+    --border-radius-md: 8px;
+    --border-radius-lg: 12px;
+    --font-sans: system-ui, sans-serif;
+    --font-mono: 'Courier New', monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --color-background-primary: #1a1a18;
+      --color-background-secondary: #2c2c2a;
+      --color-background-tertiary: #3d3d3a;
+      --color-text-primary: #f1efe8;
+      --color-text-secondary: #b4b2a9;
+      --color-border-secondary: rgba(255,255,255,0.2);
+      --color-border-primary: rgba(255,255,255,0.35);
+      --color-border-tertiary: rgba(255,255,255,0.1);
+    }
+  }
+  body { font-family: var(--font-sans); background: var(--color-background-primary); color: var(--color-text-primary); margin: 0; padding: 1.5rem; box-sizing: border-box; }
+  .tab-row { display:flex; gap:8px; margin-bottom:1.2rem; flex-wrap:wrap; }
+  .tab { padding:6px 16px; border:0.5px solid var(--color-border-secondary); border-radius:var(--border-radius-md); cursor:pointer; font-size:13px; background:transparent; color:var(--color-text-secondary); }
+  .tab.active { background:var(--color-background-secondary); color:var(--color-text-primary); border-color:var(--color-border-primary); font-weight:500; }
+  .panel { display:none; } .panel.active { display:block; }
+  canvas { display:block; border-radius:var(--border-radius-md); border:0.5px solid var(--color-border-tertiary); max-width:100%; }
+  .explain { background:var(--color-background-secondary); border-radius:var(--border-radius-md); padding:11px 15px; font-size:13px; line-height:1.65; color:var(--color-text-secondary); margin:10px 0; }
+  .formula { font-family:var(--font-mono); font-size:12px; background:var(--color-background-tertiary); padding:7px 11px; border-radius:var(--border-radius-md); margin:8px 0; color:var(--color-text-primary); }
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:10px 0; }
+  .stat { background:var(--color-background-secondary); border-radius:var(--border-radius-md); padding:9px 12px; }
+  .sl { font-size:11px; color:var(--color-text-secondary); margin-bottom:2px; }
+  .sv { font-size:16px; font-weight:500; }
+  .slider-row { display:flex; align-items:center; gap:10px; font-size:13px; color:var(--color-text-secondary); margin:8px 0; }
+  .warn { border-left:3px solid #D85A30; padding-left:10px; }
+  .good { border-left:3px solid #1D9E75; padding-left:10px; }
+  input[type=range] { flex:1; }
+</style>
+</head>
+<body>
+
+<h1 style="font-size:18px;font-weight:500;margin:0 0 1.2rem">Что даёт центрирование — три эффекта</h1>
+
+<div class="tab-row">
+  <button class="tab active" onclick="sw('geom')">1. Геометрия</button>
+  <button class="tab" onclick="sw('cov')">2. Ковариация</button>
+  <button class="tab" onclick="sw('proj')">3. Проекции</button>
+</div>
+
+<!-- PANEL 1 -->
+<div class="panel active" id="tab-geom">
+  <div class="explain warn">
+    <strong style="color:var(--color-text-primary)">Проблема без центрирования:</strong> PCA ищет ось максимальной дисперсии, но «дисперсия» считается относительно нуля. Если данные сдвинуты, первая компонента будет просто указывать на среднее — это бесполезно.
+  </div>
+  <div class="slider-row">
+    <span>Сдвиг данных:</span>
+    <input type="range" id="shift-x" min="-80" max="80" value="60" oninput="drawGeom()">
+    <span>↕</span>
+    <input type="range" id="shift-y" min="-60" max="60" value="50" oninput="drawGeom()">
+  </div>
+  <canvas id="c-geom" width="620" height="320"></canvas>
+  <div class="row2" style="margin-top:8px">
+    <div class="stat"><div class="sl">PC1 без центрирования (угол)</div><div class="sv" id="ang-raw">—</div></div>
+    <div class="stat"><div class="sl">PC1 с центрированием (угол)</div><div class="sv" id="ang-cen">—</div></div>
+  </div>
+  <div class="explain good" style="margin-top:8px">
+    <strong style="color:var(--color-text-primary)">После центрирования:</strong> ковариационная матрица считает отклонения от среднего, а не от нуля — и PC1 честно находит направление максимального разброса.
+  </div>
+</div>
+
+<!-- PANEL 2 -->
+<div class="panel" id="tab-cov">
+  <div class="explain">
+    <strong style="color:var(--color-text-primary)">Математически:</strong> без центрирования XᵀX — это матрица вторых моментов, а не ковариаций. Они равны только если μ = 0.
+  </div>
+  <div class="formula">Cov(X) = E[(x−μ)(x−μ)ᵀ] = E[xxᵀ] − μμᵀ</div>
+  <div class="formula">XᵀX/n = Cov + μμᵀ  ← лишний ранг-1 член!</div>
+  <div class="slider-row">
+    <span>Среднее μ:</span>
+    <input type="range" id="mu-val" min="0" max="80" value="40" oninput="drawCov()">
+    <span id="mu-show">40</span>
+  </div>
+  <canvas id="c-cov" width="620" height="280"></canvas>
+  <div class="explain warn" style="margin-top:8px">
+    Член μμᵀ имеет ранг 1 и всегда направлен вдоль вектора среднего. Он "ворует" первую главную компоненту и превращает её в бесполезный сдвиг.
+  </div>
+</div>
+
+<!-- PANEL 3 -->
+<div class="panel" id="tab-proj">
+  <div class="explain">
+    <strong style="color:var(--color-text-primary)">Проекции:</strong> когда мы восстанавливаем данные из k компонент, нецентрированные данные дают системный сдвиг. Центрирование → потом PCA → потом обратно добавляем среднее.
+  </div>
+  <div class="formula">x̂ = μ + Vₖ Vₖᵀ (x − μ)</div>
+  <div class="slider-row">
+    <span>k компонент:</span>
+    <input type="range" id="kk" min="1" max="2" value="1" step="1" oninput="drawProj()">
+    <span id="kk-show">k = 1</span>
+  </div>
+  <canvas id="c-proj" width="620" height="300"></canvas>
+  <div class="row2" style="margin-top:8px">
+    <div class="stat"><div class="sl">Ошибка БЕЗ центрирования</div><div class="sv" id="err-raw" style="color:#D85A30">—</div></div>
+    <div class="stat"><div class="sl">Ошибка С центрированием</div><div class="sv" id="err-cen" style="color:#1D9E75">—</div></div>
+  </div>
+</div>
+
+<script>
+function sw(name) {
+  const names = ['geom','cov','proj'];
+  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',names[i]===name));
+  document.querySelectorAll('.panel').forEach((p,i)=>p.classList.toggle('active','tab-'+names[i]==='tab-'+name));
+  if(name==='geom') drawGeom();
+  if(name==='cov') drawCov();
+  if(name==='proj') drawProj();
+}
+
+const dark = ()=>matchMedia('(prefers-color-scheme: dark)').matches;
+const bg   = ()=>dark()?'#1a1a18':'#f8f7f4';
+const tc   = ()=>dark()?'rgba(255,255,255,0.8)':'rgba(0,0,0,0.75)';
+const gc   = ()=>dark()?'rgba(255,255,255,0.07)':'rgba(0,0,0,0.06)';
+
+function axes(ctx,cx,cy,W,H,sc){
+  ctx.strokeStyle=gc();ctx.lineWidth=0.5;
+  for(let i=-12;i<=12;i++){
+    ctx.beginPath();ctx.moveTo(cx+i*sc,0);ctx.lineTo(cx+i*sc,H);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(0,cy+i*sc);ctx.lineTo(W,cy+i*sc);ctx.stroke();
+  }
+  ctx.strokeStyle=dark()?'rgba(255,255,255,0.2)':'rgba(0,0,0,0.2)';ctx.lineWidth=0.8;
+  ctx.beginPath();ctx.moveTo(0,cy);ctx.lineTo(W,cy);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(cx,0);ctx.lineTo(cx,H);ctx.stroke();
+}
+
+function arrowLine(ctx,x1,y1,x2,y2,col,lw=2){
+  ctx.strokeStyle=col;ctx.fillStyle=col;ctx.lineWidth=lw;
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+  let a=Math.atan2(y2-y1,x2-x1);
+  ctx.beginPath();ctx.moveTo(x2,y2);
+  ctx.lineTo(x2-9*Math.cos(a-.38),y2-9*Math.sin(a-.38));
+  ctx.lineTo(x2-9*Math.cos(a+.38),y2-9*Math.sin(a+.38));
+  ctx.closePath();ctx.fill();
+}
+
+const BASE = (()=>{
+  let pts=[];
+  let s=42;
+  function rng(){s=(s*1664525+1013904223)&0xffffffff;return(s>>>0)/0xffffffff;}
+  for(let i=0;i<80;i++){
+    let u=0,v=0;for(let j=0;j<6;j++){u+=rng()-.5;v+=rng()-.5;}
+    pts.push([u*28+v*6, u*18+v*12]);
+  }
+  let mx=pts.reduce((a,p)=>a+p[0],0)/pts.length;
+  let my=pts.reduce((a,p)=>a+p[1],0)/pts.length;
+  return pts.map(p=>[p[0]-mx,p[1]-my]);
+})();
+
+function covEigen(pts){
+  let n=pts.length,cxx=0,cyy=0,cxy=0;
+  pts.forEach(([x,y])=>{cxx+=x*x;cyy+=y*y;cxy+=x*y;});
+  cxx/=n;cyy/=n;cxy/=n;
+  let tr=cxx+cyy,det=cxx*cyy-cxy*cxy;
+  let disc=Math.sqrt(Math.max(0,(tr/2)**2-det));
+  let l1=tr/2+disc,l2=tr/2-disc;
+  let ang=Math.atan2(l1-cxx,cxy);
+  return{l1,l2,ang};
+}
+
+function drawGeom(){
+  let sx=+document.getElementById('shift-x').value;
+  let sy=+document.getElementById('shift-y').value;
+  let shifted=BASE.map(([x,y])=>[x+sx,y+sy]);
+  let centered=BASE;
+  let c=document.getElementById('c-geom');
+  let ctx=c.getContext('2d');
+  let W=c.width,H=c.height,cx=W/2,cy=H/2,sc=2.8;
+  ctx.clearRect(0,0,W,H);ctx.fillStyle=bg();ctx.fillRect(0,0,W,H);
+  axes(ctx,cx,cy,W,H,sc*10);
+  ctx.fillStyle='#D85A30';ctx.globalAlpha=0.35;
+  shifted.forEach(([x,y])=>{ctx.beginPath();ctx.arc(cx+x*sc,cy-y*sc,3,0,Math.PI*2);ctx.fill();});
+  ctx.globalAlpha=1;
+  ctx.fillStyle='#378ADD';ctx.globalAlpha=0.55;
+  centered.forEach(([x,y])=>{ctx.beginPath();ctx.arc(cx+x*sc,cy-y*sc,3,0,Math.PI*2);ctx.fill();});
+  ctx.globalAlpha=1;
+  let n=shifted.length;
+  let r2xx=0,r2yy=0,r2xy=0;
+  shifted.forEach(([x,y])=>{r2xx+=x*x;r2yy+=y*y;r2xy+=x*y;});
+  r2xx/=n;r2yy/=n;r2xy/=n;
+  let trR=r2xx+r2yy,detR=r2xx*r2yy-r2xy*r2xy;
+  let discR=Math.sqrt(Math.max(0,(trR/2)**2-detR));
+  let l1R=trR/2+discR;
+  let angR=Math.atan2(l1R-r2xx,r2xy);
+  let lenR=Math.sqrt(l1R)*sc*1.8;
+  arrowLine(ctx,cx,cy,cx+Math.cos(angR)*lenR,cy-Math.sin(angR)*lenR,'#D85A30',2.5);
+  arrowLine(ctx,cx,cy,cx-Math.cos(angR)*lenR,cy+Math.sin(angR)*lenR,'#D85A30',1.5);
+  let {l1,ang}=covEigen(centered);
+  let lenC=Math.sqrt(l1)*sc*1.8;
+  arrowLine(ctx,cx,cy,cx+Math.cos(ang)*lenC,cy-Math.sin(ang)*lenC,'#1D9E75',2.5);
+  arrowLine(ctx,cx,cy,cx-Math.cos(ang)*lenC,cy+Math.sin(ang)*lenC,'#1D9E75',1.5);
+  ctx.fillStyle='#D85A30';
+  ctx.beginPath();ctx.arc(cx+sx*sc,cy-sy*sc,5,0,Math.PI*2);ctx.fill();
+  ctx.font='11px var(--font-sans)';ctx.fillStyle=tc();ctx.textAlign='left';
+  ctx.fillText('μ',cx+sx*sc+8,cy-sy*sc+4);
+  ctx.font='11px var(--font-sans)';ctx.textAlign='left';
+  ctx.fillStyle='#D85A30';ctx.fillText('● Сдвинутые / PC1 (неверно)',12,18);
+  ctx.fillStyle='#378ADD';ctx.fillText('● Центрированные',12,34);
+  ctx.fillStyle='#1D9E75';ctx.fillText('← PC1 (верно)',12,50);
+  document.getElementById('ang-raw').textContent=(angR*180/Math.PI).toFixed(1)+'°';
+  document.getElementById('ang-cen').textContent=(ang*180/Math.PI).toFixed(1)+'°';
+}
+
+function drawCov(){
+  let mu=+document.getElementById('mu-val').value;
+  document.getElementById('mu-show').textContent=mu;
+  let raw=[-30,-20,-10,0,10,20,30].map(x=>x+mu);
+  let n=raw.length;
+  let xmean=raw.reduce((a,b)=>a+b,0)/n;
+  let varRaw=raw.reduce((a,x)=>a+x*x,0)/n;
+  let varCov=raw.reduce((a,x)=>a+(x-xmean)**2,0)/n;
+  let muSq=xmean*xmean;
+  let c=document.getElementById('c-cov');
+  let ctx=c.getContext('2d');
+  let W=c.width,H=c.height;
+  ctx.clearRect(0,0,W,H);ctx.fillStyle=bg();ctx.fillRect(0,0,W,H);
+  let bw=180,bh_max=180,left1=80,left2=360,top=230;
+  let maxV=varRaw||1;
+  function bar(x,y0,h,col,label){
+    ctx.fillStyle=col;ctx.globalAlpha=0.8;
+    ctx.fillRect(x,y0-h,bw,h);ctx.globalAlpha=1;
+    ctx.strokeStyle=dark()?'rgba(255,255,255,0.15)':'rgba(0,0,0,0.15)';ctx.lineWidth=0.5;
+    ctx.strokeRect(x,y0-h,bw,h);
+    ctx.font='11px var(--font-sans)';ctx.fillStyle=tc();ctx.textAlign='center';
+    ctx.fillText(label,x+bw/2,y0+16);
+  }
+  let hCov=bh_max*(varCov/maxV);
+  let hMu=bh_max*(muSq/maxV);
+  let totalH=Math.min(bh_max,hCov+hMu);
+  let hCovD=totalH*(varCov/(varCov+muSq+0.001));
+  let hMuD=totalH*(muSq/(varCov+muSq+0.001));
+  bar(left1,top,hMuD+hCovD,'#7F77DD','XᵀX/n (без центр.)');
+  bar(left1,top,hCovD,'#378ADD','');
+  ctx.font='11px var(--font-mono)';ctx.fillStyle='#fff';ctx.textAlign='center';
+  if(hMuD>16) ctx.fillText('μμᵀ = '+muSq.toFixed(0),left1+bw/2,top-hCovD-hMuD/2+4);
+  if(hCovD>16) ctx.fillText('Cov = '+varCov.toFixed(0),left1+bw/2,top-hCovD/2+4);
+  let hC2=bh_max*(varCov/maxV);
+  bar(left2,top,hC2,'#1D9E75','Cov(X) (с центрир.)');
+  ctx.font='11px var(--font-mono)';ctx.fillStyle='#fff';ctx.textAlign='center';
+  if(hC2>16) ctx.fillText('Cov = '+varCov.toFixed(0),left2+bw/2,top-hC2/2+4);
+  ctx.strokeStyle=dark()?'rgba(255,255,255,0.2)':'rgba(0,0,0,0.2)';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(40,top);ctx.lineTo(W-20,top);ctx.stroke();
+  ctx.font='12px var(--font-sans)';ctx.fillStyle=tc();ctx.textAlign='center';
+  ctx.fillText('Лишний член μμᵀ = '+muSq.toFixed(0)+' при μ = '+mu,W/2,top+40);
+}
+
+function drawProj(){
+  let k=+document.getElementById('kk').value;
+  document.getElementById('kk-show').textContent='k = '+k;
+  let pts=BASE;
+  let n=pts.length;
+  let offx=50,offy=30;
+  let shifted=pts.map(([x,y])=>[x+offx,y+offy]);
+  let {l1,l2,ang}=covEigen(pts);
+  let v1=[Math.cos(ang),Math.sin(ang)],v2=[-Math.sin(ang),Math.cos(ang)];
+  function reconCen(p){
+    let dx=p[0],dy=p[1];
+    let s1=dx*v1[0]+dy*v1[1];
+    let s2=dx*v2[0]+dy*v2[1];
+    return [s1*v1[0]+(k>=2?s2*v2[0]:0)+offx, s1*v1[1]+(k>=2?s2*v2[1]:0)+offy];
+  }
+  let rxx=0,ryy=0,rxy=0;
+  shifted.forEach(([x,y])=>{rxx+=x*x;ryy+=y*y;rxy+=x*y;});
+  rxx/=n;ryy/=n;rxy/=n;
+  let tr=rxx+ryy,det=rxx*ryy-rxy*rxy;
+  let disc=Math.sqrt(Math.max(0,(tr/2)**2-det));
+  let l1r=tr/2+disc;
+  let angR=Math.atan2(l1r-rxx,rxy);
+  let w1=[Math.cos(angR),Math.sin(angR)],w2=[-Math.sin(angR),Math.cos(angR)];
+  function reconRaw(p){
+    let s1=p[0]*w1[0]+p[1]*w1[1];
+    let s2=p[0]*w2[0]+p[1]*w2[1];
+    return [s1*w1[0]+(k>=2?s2*w2[0]:0), s1*w1[1]+(k>=2?s2*w2[1]:0)];
+  }
+  let errCen=Math.sqrt(pts.reduce((s,p,i)=>{
+    let r=reconCen(p);let dx=shifted[i][0]-r[0],dy=shifted[i][1]-r[1];return s+dx*dx+dy*dy;
+  },0)/n);
+  let errRaw=Math.sqrt(pts.reduce((s,p,i)=>{
+    let r=reconRaw(shifted[i]);let dx=shifted[i][0]-r[0],dy=shifted[i][1]-r[1];return s+dx*dx+dy*dy;
+  },0)/n);
+  document.getElementById('err-raw').textContent=errRaw.toFixed(2);
+  document.getElementById('err-cen').textContent=errCen.toFixed(2);
+  let c=document.getElementById('c-proj');
+  let ctx=c.getContext('2d');
+  let W=c.width,H=c.height,cx=W/2-30,cy=H/2+20,sc=2.5;
+  ctx.clearRect(0,0,W,H);ctx.fillStyle=bg();ctx.fillRect(0,0,W,H);
+  axes(ctx,cx,cy,W,H,sc*10);
+  ctx.fillStyle='#888';ctx.globalAlpha=0.35;
+  shifted.forEach(([x,y])=>{ctx.beginPath();ctx.arc(cx+x*sc,cy-y*sc,3,0,Math.PI*2);ctx.fill();});
+  ctx.globalAlpha=1;
+  ctx.fillStyle='#1D9E75';ctx.globalAlpha=0.7;
+  pts.forEach((p,i)=>{
+    let r=reconCen(p);
+    ctx.beginPath();ctx.arc(cx+r[0]*sc,cy-r[1]*sc,3,0,Math.PI*2);ctx.fill();
+  });
+  ctx.globalAlpha=1;
+  if(k===1){
+    ctx.fillStyle='#D85A30';ctx.globalAlpha=0.55;
+    shifted.forEach((p,i)=>{
+      let r=reconRaw(p);
+      ctx.beginPath();ctx.arc(cx+r[0]*sc,cy-r[1]*sc,3,0,Math.PI*2);ctx.fill();
+    });
+    ctx.globalAlpha=1;
+  }
+  ctx.fillStyle='#888';
+  ctx.beginPath();ctx.arc(cx+offx*sc,cy-offy*sc,5,0,Math.PI*2);ctx.fill();
+  ctx.font='11px var(--font-sans)';ctx.fillStyle=tc();
+  ctx.fillText('μ',cx+offx*sc+8,cy-offy*sc);
+  ctx.font='11px var(--font-sans)';ctx.textAlign='left';
+  ctx.fillStyle='#888';ctx.fillText('● Исходные (со сдвигом)',12,18);
+  ctx.fillStyle='#1D9E75';ctx.fillText('● Реконструкция С центрир.',12,34);
+  if(k===1){ctx.fillStyle='#D85A30';ctx.fillText('● Реконструкция БЕЗ центрир. (сдвиг потерян)',12,50);}
+}
+
+drawGeom(); drawCov(); drawProj();
+</script>
+</body>
+</html>
